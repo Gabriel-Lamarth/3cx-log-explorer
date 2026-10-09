@@ -1,0 +1,22 @@
+[package]
+name = "threecx-log-explorer"
+version = "0.1.0"
+edition = "2021"
+description = "Local-first parser and diagnostic foundation for 3CX SupportInfo logs"
+license = "MIT"
+
+[lib]
+name = "threecx_log_explorer"
+path = "src/lib.rs"
+
+[[bin]]
+name = "threecx-log-explorer"
+path = "src/main.rs"
+
+[dependencies]
+zip = { version = "0.6.6", default-features = false, features = ["deflate"] }
+mlua = { version = "0.10", features = ["lua54", "vendored"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+[dev-dependencies]
+tempfile = "3.13"
