@@ -75,16 +75,23 @@ impl EventIndex {
              CREATE INDEX IF NOT EXISTS idx_events_call_id ON events(call_id);
              CREATE INDEX IF NOT EXISTS idx_events_flow_id ON events(flow_id);
              CREATE INDEX IF NOT EXISTS idx_events_component ON events(component);
-             CREATE INDEX IF NOT EXISTS idx_events_source_id ON events(source_id);"
+             CREATE INDEX IF NOT EXISTS idx_events_source_id ON events(source_id);
+             CREATE VIRTUAL TABLE IF NOT EXISTS event_fts USING fts5(message, content='events', content_rowid='id');"
         ).map_err(|e| e.to_string())?;
         Ok(Self { connection })
     }
 
     pub fn index_file(&mut self, path: impl AsRef<Path>) -> Result<usize, String> {
+        self.index_file_with_policy(path, false)
+    }
+
+    /// Index a log while optionally skipping routine low-value Trace/Debug events.
+    /// Original files are never modified; events with identifiers or error-like content are retained.
+    pub fn index_file_with_policy(&mut self, path: impl AsRef<Path>, compact: bool) -> Result<usize, String> {
         let path = path.as_ref();
         let source = path.to_string_lossy().into_owned();
         let file = File::open(path).map_err(|e| format!("não foi possível abrir '{}': {e}", path.display()))?;
-        self.index_stream(&source, |emit| {
+        self.index_stream(&source, compact, |emit| {
             parse_reader(BufReader::new(file), |event| emit(event)).map_err(|e| e.to_string())
         })
     }
@@ -96,13 +103,21 @@ impl EventIndex {
     ) -> Result<usize, String> {
         let archive_path = archive_path.as_ref();
         let source = format!("{}::{}", archive_path.display(), entry_name);
-        self.index_stream(&source, |emit| {
+        self.index_stream(&source, false, |emit| {
             read_archive_log(archive_path, entry_name, |event| emit(event))
                 .map_err(|e| e.to_string())
         })
     }
 
-    fn index_stream<F>(&mut self, source: &str, parser: F) -> Result<usize, String>
+    pub fn index_archive_log_with_policy(&mut self, archive_path: impl AsRef<Path>, entry_name: &str, compact: bool) -> Result<usize, String> {
+        let archive_path = archive_path.as_ref();
+        let source = format!("{}::{}", archive_path.display(), entry_name);
+        self.index_stream(&source, compact, |emit| {
+            read_archive_log(archive_path, entry_name, |event| emit(event)).map_err(|e| e.to_string())
+        })
+    }
+
+    fn index_stream<F>(&mut self, source: &str, compact: bool, parser: F) -> Result<usize, String>
     where
         F: FnOnce(&mut dyn FnMut(LogEvent)) -> Result<(), String>,
     {
@@ -115,6 +130,7 @@ impl EventIndex {
         let source_id: i64 = transaction.query_row(
             "SELECT id FROM sources WHERE source = ?1", params![source], |row| row.get(0)
         ).map_err(|e| e.to_string())?;
+        transaction.execute("DELETE FROM event_fts WHERE rowid IN (SELECT id FROM events WHERE source_id = ?1)", params![source_id]).map_err(|e| e.to_string())?;
         transaction.execute("DELETE FROM events WHERE source_id = ?1", params![source_id])
             .map_err(|e| e.to_string())?;
 
@@ -127,8 +143,9 @@ impl EventIndex {
                     start_line, end_line, flow_id, call_id, component
                  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"
             ).map_err(|e| e.to_string())?;
+            let mut fts_statement = transaction.prepare("INSERT INTO event_fts(rowid, message) VALUES (?1, ?2)").map_err(|e| e.to_string())?;
             let mut insert_event = |event: LogEvent| {
-                if insertion_error.is_some() { return; }
+                if insertion_error.is_some() || (compact && !keep_compact_event(&event)) { return; }
                 let result = statement.execute(params![
                     source_id,
                     event.timestamp,
@@ -136,7 +153,7 @@ impl EventIndex {
                     event.level.as_str(),
                     event.source,
                     event.message,
-                    event.raw,
+                    "", // Original bytes remain in the source file; avoid storing the same text twice.
                     event.start_line as i64,
                     event.end_line as i64,
                     event.flow_id,
@@ -144,7 +161,12 @@ impl EventIndex {
                     event.component,
                 ]);
                 match result {
-                    Ok(_) => count += 1,
+                    Ok(_) => {
+                        let id = transaction.last_insert_rowid();
+                        if let Err(error) = fts_statement.execute(params![id, event.message]) {
+                            insertion_error = Some(error.to_string());
+                        } else { count += 1; }
+                    },
                     Err(error) => insertion_error = Some(error.to_string()),
                 }
             };
@@ -171,11 +193,10 @@ impl EventIndex {
         push_filter(&mut sql, &mut values, "e.component", filters.component.as_deref());
         push_filter(&mut sql, &mut values, "e.level", filters.level.as_deref());
         push_filter(&mut sql, &mut values, "s.source", filters.source.as_deref());
-        if let Some(text) = filters.text.as_deref() {
-            sql.push_str(" AND (e.message LIKE ? OR e.raw LIKE ?)");
-            let pattern = format!("%{text}%");
-            values.push(Value::Text(pattern.clone()));
-            values.push(Value::Text(pattern));
+        if let Some(text) = filters.text.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            let query = text.split_whitespace().map(|word| format!("\"{}\"", word.replace('\"', ""))).collect::<Vec<_>>().join(" AND ");
+            sql.push_str(" AND e.id IN (SELECT rowid FROM event_fts WHERE message MATCH ?)");
+            values.push(Value::Text(query));
         }
         if let Some(from) = filters.from.as_deref() {
             sql.push_str(" AND e.timestamp >= ?");
@@ -231,4 +252,15 @@ fn push_filter(sql: &mut String, values: &mut Vec<Value>, column: &str, value: O
         sql.push_str(" = ?");
         values.push(Value::Text(value.to_string()));
     }
+}
+
+/// Keep severe, call-related, and diagnostic-looking events when compact indexing is enabled.
+fn keep_compact_event(event: &LogEvent) -> bool {
+    let level = event.level.as_str().to_ascii_lowercase();
+    if matches!(level.as_str(), "error" | "fatal" | "critical" | "warn" | "warning") { return true; }
+    let text = format!("{} {}", event.message, event.raw).to_ascii_lowercase();
+    let important = ["exception", "failed", "failure", "error", "timeout", "timed out", "unauthorized", "forbidden", "rejected", "disconnect", "terminated", "cancel", "unreachable", "refused", "not found", "503", "500", "408", "486", "401", "407", "authentication", "denied", "crash", "panic", "invite", ""bye"", ""ack"", "connectionstatus", "connected", "disconnected", "call terminated", "call has been removed", "switching executing mode", "oncallterminated", "transfer", "route to", "route", "session", "sip/2.0"];
+    if important.iter().any(|needle| text.contains(needle)) { return true; }
+    if matches!(level.as_str(), "trace" | "debug") { return false; }
+    event.call_id.is_some() || event.flow_id.is_some() || !matches!(level.as_str(), "trace" | "debug")
 }

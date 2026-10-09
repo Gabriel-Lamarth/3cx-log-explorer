@@ -21,3 +21,5 @@ pub use parser::{parse_reader, parse_text};
 pub use timeline::{build_timeline, CorrelationKey, Timeline};
 
 pub use report::{render_html_report, write_html_report};
+
+pub mod web;

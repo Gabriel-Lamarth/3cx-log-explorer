@@ -1,0 +1,25 @@
+services:
+  3cx-log-explorer:
+    build: .
+    container_name: 3cx-log-explorer
+    restart: unless-stopped
+    environment:
+      APP_USERS: ${APP_USERS:?Defina APP_USERS no .env}
+      BIND_ADDR: 0.0.0.0:8080
+      DATA_DIR: /data
+      SHARED_LOGS_DIR: /shared-logs
+    ports:
+      - "8080:8080"
+    volumes:
+      - explorer-data:/data
+      - ./shared-logs:/shared-logs:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  explorer-data:
