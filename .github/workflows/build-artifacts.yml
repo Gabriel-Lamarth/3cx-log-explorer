@@ -1,0 +1,73 @@
+name: Build Windows EXE and Linux AppImage
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows-exe:
+    name: Windows installer EXE
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install frontend dependencies
+        working-directory: desktop
+        run: npm install
+      - name: Build NSIS installer only
+        working-directory: desktop
+        run: npm run app:build -- --bundles nsis
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 3cx-log-explorer-windows-exe-${{ github.sha }}
+          if-no-files-found: error
+          path: desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+  linux-appimage:
+    name: Linux AppImage
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential curl wget file libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Install frontend dependencies
+        working-directory: desktop
+        run: npm install
+      - name: Build AppImage only
+        working-directory: desktop
+        run: npm run app:build -- --bundles appimage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 3cx-log-explorer-appimage-${{ github.sha }}
+          if-no-files-found: error
+          path: desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+
+  release:
+    name: Publish EXE and AppImage
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows-exe, linux-appimage]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Attach only EXE and AppImage to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-assets/*.exe
+            release-assets/*.AppImage
