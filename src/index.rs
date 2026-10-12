@@ -259,7 +259,7 @@ fn keep_compact_event(event: &LogEvent) -> bool {
     let level = event.level.as_str().to_ascii_lowercase();
     if matches!(level.as_str(), "error" | "fatal" | "critical" | "warn" | "warning") { return true; }
     let text = format!("{} {}", event.message, event.raw).to_ascii_lowercase();
-    let important = ["exception", "failed", "failure", "error", "timeout", "timed out", "unauthorized", "forbidden", "rejected", "disconnect", "terminated", "cancel", "unreachable", "refused", "not found", "503", "500", "408", "486", "401", "407", "authentication", "denied", "crash", "panic", "invite", ""bye"", ""ack"", "connectionstatus", "connected", "disconnected", "call terminated", "call has been removed", "switching executing mode", "oncallterminated", "transfer", "route to", "route", "session", "sip/2.0"];
+    let important = ["exception", "failed", "failure", "error", "timeout", "timed out", "unauthorized", "forbidden", "rejected", "disconnect", "terminated", "cancel", "unreachable", "refused", "not found", "503", "500", "408", "486", "401", "407", "authentication", "denied", "crash", "panic", "invite", "bye", "ack", "connectionstatus", "connected", "disconnected", "call terminated", "call has been removed", "switching executing mode", "oncallterminated", "transfer", "route to", "route", "session", "sip/2.0"];
     if important.iter().any(|needle| text.contains(needle)) { return true; }
     if matches!(level.as_str(), "trace" | "debug") { return false; }
     event.call_id.is_some() || event.flow_id.is_some() || !matches!(level.as_str(), "trace" | "debug")

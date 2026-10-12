@@ -4,7 +4,7 @@ use crate::model::{LogEvent, LogLevel};
 use mlua::{Function, Lua, LuaOptions, StdLib, Table};
 use std::path::Path;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Finding {
     pub rule_id: String,
     pub title: String,
@@ -21,6 +21,9 @@ pub struct Finding {
 /// Executes user-selected Lua rules with safe standard libraries only.
 /// The Lua script must return an array of rule tables with `match(event)` and
 /// finding metadata (`id`, `title`, `severity`, `description`, `recommendation`).
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct RuleSummary { pub id: String, pub title: String, pub severity: String, pub description: String, pub recommendation: String }
+
 pub struct RuleEngine {
     lua: Lua,
     rules: Vec<CompiledRule>,
@@ -67,6 +70,10 @@ impl RuleEngine {
             });
         }
         Ok(Self { lua, rules })
+    }
+
+    pub fn summaries(&self) -> Vec<RuleSummary> {
+        self.rules.iter().map(|r| RuleSummary { id:r.id.clone(), title:r.title.clone(), severity:r.severity.clone(), description:r.description.clone(), recommendation:r.recommendation.clone() }).collect()
     }
 
     pub fn diagnose(&self, event: &LogEvent) -> mlua::Result<Vec<Finding>> {

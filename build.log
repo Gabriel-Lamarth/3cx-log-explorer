@@ -1,0 +1,383 @@
+--progress is a global compose flag, better use `docker compose --progress xx build ...
+ Image 3cx-log-explorer-3cx-log-explorer Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 594B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 1.00kB done
+#2 DONE 0.0s
+
+#3 resolve image config for docker-image://docker.io/docker/dockerfile:1
+#3 DONE 1.5s
+
+#4 docker-image://docker.io/docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#4 resolve docker.io/docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e 0.0s done
+#4 CACHED
+
+#5 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#5 ...
+
+#6 [internal] load metadata for docker.io/library/rust:1-bookworm
+#6 DONE 0.8s
+
+#5 [internal] load metadata for docker.io/library/debian:bookworm-slim
+#5 DONE 1.0s
+
+#7 [internal] load .dockerignore
+#7 transferring context: 2B done
+#7 DONE 0.0s
+
+#8 [builder 1/9] FROM docker.io/library/rust:1-bookworm@sha256:114c7a4425406451c2866b6aafe69fe29b1b298832db1277d411ac73c82d04d6
+#8 resolve docker.io/library/rust:1-bookworm@sha256:114c7a4425406451c2866b6aafe69fe29b1b298832db1277d411ac73c82d04d6 0.0s done
+#8 DONE 0.0s
+
+#9 [builder 2/9] WORKDIR /app
+#9 CACHED
+
+#10 [runtime 1/5] FROM docker.io/library/debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
+#10 resolve docker.io/library/debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587 0.0s done
+#10 CACHED
+
+#11 [internal] load build context
+#11 transferring context: 13.81kB done
+#11 DONE 0.0s
+
+#12 [runtime 2/5] RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libgcc-s1 && rm -rf /var/lib/apt/lists/* && useradd --system --uid 10001 --home /nonexistent --shell /usr/sbin/nologin app
+#12 0.430 Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+#12 0.550 Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+#12 0.599 Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
+#12 0.642 Get:4 http://deb.debian.org/debian bookworm/main amd64 Packages [8790 kB]
+#12 1.965 Get:5 http://deb.debian.org/debian bookworm-updates/main amd64 Packages [6924 B]
+#12 1.965 Get:6 http://deb.debian.org/debian-security bookworm-security/main amd64 Packages [349 kB]
+#12 2.665 Fetched 9388 kB in 2s (4034 kB/s)
+#12 2.665 Reading package lists...
+#12 ...
+
+#13 [builder 3/9] RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
+#13 0.472 Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+#13 0.582 Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+#13 0.627 Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
+#13 0.673 Get:4 http://deb.debian.org/debian bookworm/main amd64 Packages [8790 kB]
+#13 1.008 Get:5 http://deb.debian.org/debian bookworm-updates/main amd64 Packages [6924 B]
+#13 1.044 Get:6 http://deb.debian.org/debian-security bookworm-security/main amd64 Packages [349 kB]
+#13 1.691 Fetched 9388 kB in 1s (6947 kB/s)
+#13 1.691 Reading package lists...
+#13 2.168 Reading package lists...
+#13 2.643 Building dependency tree...
+#13 2.786 Reading state information...
+#13 3.059 pkg-config is already the newest version (1.8.1-1).
+#13 3.059 pkg-config set to manually installed.
+#13 3.059 libssl-dev is already the newest version (3.0.22-1~deb12u1).
+#13 3.059 ca-certificates is already the newest version (20250419~deb12u1).
+#13 3.059 0 upgraded, 0 newly installed, 0 to remove and 4 not upgraded.
+#13 DONE 3.2s
+
+#12 [runtime 2/5] RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libgcc-s1 && rm -rf /var/lib/apt/lists/* && useradd --system --uid 10001 --home /nonexistent --shell /usr/sbin/nologin app
+#12 2.665 Reading package lists...
+#12 3.146 Reading package lists...
+#12 ...
+
+#14 [builder 4/9] COPY Cargo.toml ./
+#14 DONE 0.1s
+
+#15 [builder 5/9] COPY src ./src
+#15 DONE 0.1s
+
+#16 [builder 6/9] COPY web ./web
+#16 DONE 0.1s
+
+#17 [builder 7/9] COPY rules ./rules
+#17 DONE 0.1s
+
+#12 [runtime 2/5] RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libgcc-s1 && rm -rf /var/lib/apt/lists/* && useradd --system --uid 10001 --home /nonexistent --shell /usr/sbin/nologin app
+#12 3.146 Reading package lists...#12 ...
+
+#18 [builder 8/9] COPY docs ./docs
+#18 DONE 0.1s
+
+#12 [runtime 2/5] RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libgcc-s1 && rm -rf /var/lib/apt/lists/* && useradd --system --uid 10001 --home /nonexistent --shell /usr/sbin/nologin app
+#12 3.146 Reading package lists...
+#12 3.642 Building dependency tree...
+#12 3.810 Reading state information...
+#12 4.075 libgcc-s1 is already the newest version (12.2.0-14+deb12u1).
+#12 4.075 libgcc-s1 set to manually installed.
+#12 4.075 The following additional packages will be installed:
+#12 4.075   libssl3 openssl
+#12 4.098 The following NEW packages will be installed:
+#12 4.099   ca-certificates libssl3 openssl
+#12 4.202 0 upgraded, 3 newly installed, 0 to remove and 1 not upgraded.
+#12 4.202 Need to get 3643 kB of archives.
+#12 4.202 After this operation, 8955 kB of additional disk space will be used.
+#12 4.202 Get:1 http://deb.debian.org/debian-security bookworm-security/main amd64 libssl3 amd64 3.0.22-1~deb12u1 [2039 kB]
+#12 4.414 Get:2 http://deb.debian.org/debian-security bookworm-security/main amd64 openssl amd64 3.0.22-1~deb12u1 [1442 kB]
+#12 4.437 Get:3 http://deb.debian.org/debian-security bookworm-security/main amd64 ca-certificates all 20250419~deb12u1 [162 kB]
+#12 4.549 debconf: delaying package configuration, since apt-utils is not installed
+#12 4.579 Fetched 3643 kB in 0s (11.1 MB/s)
+#12 4.601 Selecting previously unselected package libssl3:amd64.
+#12 4.601 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 6096 files and directories currently installed.)
+#12 4.615 Preparing to unpack .../libssl3_3.0.22-1~deb12u1_amd64.deb ...
+#12 4.640 Unpacking libssl3:amd64 (3.0.22-1~deb12u1) ...
+#12 4.773 Selecting previously unselected package openssl.
+#12 4.775 Preparing to unpack .../openssl_3.0.22-1~deb12u1_amd64.deb ...
+#12 4.779 Unpacking openssl (3.0.22-1~deb12u1) ...
+#12 4.907 Selecting previously unselected package ca-certificates.
+#12 4.909 Preparing to unpack .../ca-certificates_20250419~deb12u1_all.deb ...
+#12 4.917 Unpacking ca-certificates (20250419~deb12u1) ...
+#12 4.978 Setting up libssl3:amd64 (3.0.22-1~deb12u1) ...
+#12 4.991 Setting up openssl (3.0.22-1~deb12u1) ...
+#12 5.007 Setting up ca-certificates (20250419~deb12u1) ...
+#12 5.075 debconf: unable to initialize frontend: Dialog
+#12 5.075 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#12 5.075 debconf: falling back to frontend: Readline
+#12 5.075 debconf: unable to initialize frontend: Readline
+#12 5.075 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+#12 5.075 debconf: falling back to frontend: Teletype
+#12 5.429 Updating certificates in /etc/ssl/certs...
+#12 5.971 150 added, 0 removed; done.
+#12 6.003 Processing triggers for libc-bin (2.36-9+deb12u14) ...
+#12 6.040 Processing triggers for ca-certificates (20250419~deb12u1) ...
+#12 6.050 Updating certificates in /etc/ssl/certs...
+#12 6.997 0 added, 0 removed; done.
+#12 6.997 Running hooks in /etc/ca-certificates/update.d...
+#12 6.998 done.
+#12 7.069 useradd warning: app's uid 10001 is greater than SYS_UID_MAX 999
+#12 DONE 7.2s
+
+#19 [builder 9/9] RUN cargo build --release --bin threecx-log-explorer-web
+#19 0.389     Updating crates.io index
+#19 ...
+
+#20 [runtime 3/5] WORKDIR /app
+#20 DONE 0.1s
+
+#19 [builder 9/9] RUN cargo build --release --bin threecx-log-explorer-web
+#19 5.899      Locking 110 packages to highest compatible versions
+#19 5.903       Adding axum v0.7.9 (available: v0.8.9)
+#19 5.904       Adding base64 v0.22.1 (available: v0.23.1)
+#19 5.910       Adding lua-src v547.0.0 (available: v547.1.0)
+#19 5.910       Adding luajit-src v210.5.12+a4f56a4 (available: v210.7.4+c6ffc14)
+#19 5.911       Adding mlua v0.10.5 (available: v0.12.2)
+#19 5.913       Adding rusqlite v0.32.1 (available: v0.40.2)
+#19 5.947       Adding zip v0.6.6 (available: v9.0.2)
+#19 5.955  Downloading crates ...
+#19 6.124   Downloaded adler2 v2.0.1
+#19 6.147   Downloaded async-trait v0.1.92
+#19 6.157   Downloaded autocfg v1.5.1
+#19 6.180   Downloaded ahash v0.8.12
+#19 6.185   Downloaded atomic-waker v1.1.2
+#19 6.213   Downloaded core_detect v1.0.0
+#19 6.248   Downloaded http-body v1.1.0
+#19 6.251   Downloaded itoa v1.0.18
+#19 6.259   Downloaded multiversion_no_op v1.0.0
+#19 6.266   Downloaded cfg-if v1.0.5
+#19 6.297   Downloaded version_check v0.9.5
+#19 6.326   Downloaded sync_wrapper v1.0.2
+#19 6.338   Downloaded scopeguard v1.2.0
+#19 6.349   Downloaded rustc-hash v2.1.3
+#19 6.359   Downloaded tower-layer v0.3.3
+#19 6.389   Downloaded httpdate v1.0.3
+#19 6.392   Downloaded tokio-macros v2.7.2
+#19 6.397   Downloaded errno v0.3.14
+#19 6.401   Downloaded form_urlencoded v1.2.2
+#19 6.428   Downloaded futures-task v0.3.34
+#19 6.436   Downloaded tower-service v0.3.3
+#19 6.465   Downloaded serde_urlencoded v0.7.1
+#19 6.477   Downloaded percent-encoding v2.3.2
+#19 6.500   Downloaded mime v0.3.17
+#19 6.536   Downloaded fallible-streaming-iterator v0.1.9
+#19 6.541   Downloaded pin-project-lite v0.2.17
+#19 6.562   Downloaded http-body-util v0.1.5
+#19 6.570   Downloaded byteorder v1.5.0
+#19 6.573   Downloaded multer v3.1.0
+#19 6.578   Downloaded fallible-iterator v0.3.0
+#19 6.587   Downloaded axum-core v0.4.5
+#19 6.595   Downloaded find-msvc-tools v0.1.14
+#19 6.600   Downloaded lock_api v0.4.14
+#19 6.607   Downloaded hashlink v0.9.1
+#19 6.611   Downloaded serde_path_to_error v0.1.20
+#19 6.615   Downloaded futures-core v0.3.34
+#19 6.617   Downloaded rustversion v1.0.23
+#19 6.622   Downloaded simd-adler32 v0.3.10
+#19 6.629   Downloaded which v7.0.3
+#19 6.636   Downloaded mlua-sys v0.6.8
+#19 6.640   Downloaded pkg-config v0.3.34
+#19 6.642   Downloaded zmij v1.0.23
+#19 6.652   Downloaded env_home v0.1.0
+#19 6.654   Downloaded simdutf8 v0.1.5
+#19 6.662   Downloaded matchit v0.7.3
+#19 6.688   Downloaded crc32fast v1.5.2
+#19 6.708   Downloaded httparse v1.10.1
+#19 6.717   Downloaded either v1.19.0
+#19 6.720   Downloaded once_cell v1.21.4
+#19 6.752   Downloaded shlex v2.0.1
+#19 6.754   Downloaded spin v0.9.9
+#19 6.758   Downloaded slab v0.4.12
+#19 6.759   Downloaded quote v1.0.47
+#19 6.763   Downloaded smallvec v1.16.3
+#19 6.765   Downloaded unicode-ident v1.0.27
+#19 6.779   Downloaded parking_lot v0.12.5
+#19 6.783   Downloaded num-traits v0.2.19
+#19 6.792   Downloaded proc-macro2 v1.0.107
+#19 6.796   Downloaded tracing-core v0.1.36
+#19 6.802   Downloaded bitflags v2.13.2
+#19 6.815   Downloaded serde_core v1.0.229
+#19 6.819   Downloaded socket2 v0.6.5
+#19 6.822   Downloaded parking_lot_core v0.9.12
+#19 6.838   Downloaded log v0.4.34
+#19 6.844   Downloaded miniz_oxide v0.9.1
+#19 6.849   Downloaded base64 v0.22.1
+#19 6.854   Downloaded bytes v1.12.1
+#19 6.874   Downloaded ryu v1.0.23
+#19 6.938   Downloaded serde_derive v1.0.229
+#19 6.943   Downloaded zip v0.6.6
+#19 6.948   Downloaded flate2 v1.1.10
+#19 6.955   Downloaded serde v1.0.229
+#19 6.963   Downloaded memchr v2.8.3
+#19 6.971   Downloaded http v1.5.0
+#19 6.977   Downloaded tower v0.5.3
+#19 7.000   Downloaded mio v1.2.4
+#19 7.009   Downloaded cc v1.8.0
+#19 7.020   Downloaded hyper-util v0.1.21
+#19 7.031   Downloaded hashbrown v0.14.5
+#19 7.039   Downloaded serde_json v1.0.154
+#19 7.050   Downloaded axum v0.7.9
+#19 7.062   Downloaded futures-util v0.3.34
+#19 7.088   Downloaded hyper v1.12.0
+#19 7.097   Downloaded rusqlite v0.32.1
+#19 7.118   Downloaded mlua v0.10.5
+#19 7.135   Downloaded vcpkg v0.2.15
+#19 7.224   Downloaded syn v3.0.9
+#19 7.242   Downloaded zerocopy v0.8.62
+#19 7.281   Downloaded encoding_rs v0.8.42
+#19 7.293   Downloaded bstr v1.13.1
+#19 7.303   Downloaded rustix v1.1.5
+#19 7.339   Downloaded tracing v0.1.44
+#19 7.370   Downloaded lua-src v547.0.0
+#19 7.394   Downloaded libc v0.2.190
+#19 7.484   Downloaded tokio v1.53.2
+#19 7.623   Downloaded luajit-src v210.5.12+a4f56a4
+#19 7.656   Downloaded linux-raw-sys v0.12.1
+#19 7.753   Downloaded libsqlite3-sys v0.30.1
+#19 7.978    Compiling proc-macro2 v1.0.107
+#19 7.978    Compiling quote v1.0.47
+#19 7.978    Compiling unicode-ident v1.0.27
+#19 7.978    Compiling cfg-if v1.0.5
+#19 7.978    Compiling libc v0.2.190
+#19 7.978    Compiling find-msvc-tools v0.1.14
+#19 7.981    Compiling itoa v1.0.18
+#19 7.981    Compiling shlex v2.0.1
+#19 7.984    Compiling pin-project-lite v0.2.17
+#19 7.998    Compiling bytes v1.12.1
+#19 7.998    Compiling version_check v0.9.5
+#19 8.042    Compiling once_cell v1.21.4
+#19 8.289    Compiling rustversion v1.0.23
+#19 8.342    Compiling pkg-config v0.3.34
+#19 8.468    Compiling rustix v1.1.5
+#19 8.650    Compiling cc v1.8.0
+#19 8.739    Compiling futures-core v0.3.34
+#19 8.841    Compiling serde_core v1.0.229
+#19 8.856    Compiling smallvec v1.16.3
+#19 8.952    Compiling linux-raw-sys v0.12.1
+#19 8.980    Compiling bitflags v2.13.2
+#19 8.988    Compiling httparse v1.10.1
+#19 9.216    Compiling env_home v0.1.0
+#19 9.259    Compiling scopeguard v1.2.0
+#19 9.275    Compiling either v1.19.0
+#19 9.299    Compiling zerocopy v0.8.62
+#19 9.373    Compiling ahash v0.8.12
+#19 9.401    Compiling slab v0.4.12
+#19 9.613    Compiling memchr v2.8.3
+#19 9.656    Compiling futures-task v0.3.34
+#19 9.738    Compiling tracing-core v0.1.36
+#19 9.888    Compiling futures-util v0.3.34
+#19 10.09    Compiling http v1.5.0
+#19 10.83    Compiling encoding_rs v0.8.42
+#19 11.04    Compiling autocfg v1.5.1
+#19 11.13    Compiling syn v3.0.9
+#19 11.23    Compiling serde v1.0.229
+#19 11.69    Compiling lua-src v547.0.0
+#19 11.91    Compiling parking_lot_core v0.9.12
+#19 12.04    Compiling tower-service v0.3.3
+#19 12.20    Compiling crc32fast v1.5.2
+#19 12.45    Compiling socket2 v0.6.5
+#19 12.47    Compiling mio v1.2.4
+#19 12.55    Compiling zmij v1.0.23
+#19 12.56    Compiling log v0.4.34
+#19 12.65    Compiling vcpkg v0.2.15
+#19 12.82    Compiling http-body v1.1.0
+#19 13.01    Compiling tracing v0.1.44
+#19 13.13    Compiling num-traits v0.2.19
+#19 13.28    Compiling multer v3.1.0
+#19 13.31    Compiling core_detect v1.0.0
+#19 13.50    Compiling serde_json v1.0.154
+#19 13.62    Compiling which v7.0.3
+#19 13.69    Compiling httpdate v1.0.3
+#19 13.79    Compiling atomic-waker v1.1.2
+#19 13.95    Compiling tower-layer v0.3.3
+#19 14.01    Compiling luajit-src v210.5.12+a4f56a4
+#19 14.08    Compiling libsqlite3-sys v0.30.1
+#19 14.10    Compiling percent-encoding v2.3.2
+#19 14.15    Compiling sync_wrapper v1.0.2
+#19 14.29    Compiling mime v0.3.17
+#19 14.35    Compiling multiversion_no_op v1.0.0
+#19 14.40    Compiling simdutf8 v0.1.5
+#19 14.51    Compiling simd-adler32 v0.3.10
+#19 14.54    Compiling mlua-sys v0.6.8
+#19 14.61    Compiling adler2 v2.0.1
+#19 14.83    Compiling miniz_oxide v0.9.1
+#19 14.86    Compiling form_urlencoded v1.2.2
+#19 15.32    Compiling http-body-util v0.1.5
+#19 15.35    Compiling lock_api v0.4.14
+#19 15.86    Compiling ryu v1.0.23
+#19 15.86    Compiling spin v0.9.9
+#19 16.01    Compiling flate2 v1.1.10
+#19 16.11    Compiling parking_lot v0.12.5
+#19 16.32    Compiling serde_path_to_error v0.1.20
+#19 16.49    Compiling bstr v1.13.1
+#19 17.59    Compiling rustc-hash v2.1.3
+#19 17.65    Compiling matchit v0.7.3
+#19 17.95    Compiling fallible-streaming-iterator v0.1.9
+#19 18.24    Compiling fallible-iterator v0.3.0
+#19 18.32    Compiling byteorder v1.5.0
+#19 18.47    Compiling base64 v0.22.1
+#19 18.89    Compiling zip v0.6.6
+#19 19.39    Compiling tokio-macros v2.7.2
+#19 19.68    Compiling serde_derive v1.0.229
+#19 19.73    Compiling hashbrown v0.14.5
+#19 19.82    Compiling async-trait v0.1.92
+#19 21.17    Compiling tokio v1.53.2
+#19 21.58    Compiling axum-core v0.4.5
+#19 21.62    Compiling hashlink v0.9.1
+#19 24.15    Compiling serde_urlencoded v0.7.1
+#19 27.69    Compiling mlua v0.10.5
+#19 27.76    Compiling hyper v1.12.0
+#19 27.76    Compiling tower v0.5.3
+#19 30.12    Compiling hyper-util v0.1.21
+#19 30.58    Compiling axum v0.7.9
+#19 69.42    Compiling rusqlite v0.32.1
+#19 70.17    Compiling threecx-log-explorer v0.1.0 (/app)
+#19 74.52     Finished `release` profile [optimized] target(s) in 1m 14s
+#19 DONE 75.0s
+
+#21 [runtime 4/5] COPY --from=builder /app/target/release/threecx-log-explorer-web /usr/local/bin/threecx-log-explorer-web
+#21 DONE 0.2s
+
+#22 [runtime 5/5] RUN mkdir -p /data /shared-logs && chown -R app:app /data /shared-logs
+#22 DONE 0.3s
+
+#23 exporting to image
+#23 exporting layers
+#23 exporting layers 0.5s done
+#23 exporting manifest sha256:f54ecd08a3a5d4e036bbbfda386a8cdbbe8e3e7d9184fb5207f1a0ccaafc2674 0.0s done
+#23 exporting config sha256:755fd1d1bcc137b74a56d02440af6805602a7ef923f304aba51c82fb06178123 0.1s done
+#23 exporting attestation manifest sha256:fddfa98e142993b44193fe9e5ce7fa94ab096355077791bc2d5aca903229d8fe 0.0s done
+#23 exporting manifest list sha256:70dda542a7c4e0bb193aa0fda9f64c38364ae718968b798d63be972550d57970 0.0s done
+#23 naming to docker.io/library/3cx-log-explorer-3cx-log-explorer:latest done
+#23 unpacking to docker.io/library/3cx-log-explorer-3cx-log-explorer:latest
+#23 unpacking to docker.io/library/3cx-log-explorer-3cx-log-explorer:latest 1.2s done
+#23 DONE 1.8s
+
+#24 resolving provenance for metadata file
+#24 DONE 0.0s
+ Image 3cx-log-explorer-3cx-log-explorer Built 
