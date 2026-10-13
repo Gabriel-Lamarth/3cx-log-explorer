@@ -86,7 +86,10 @@ impl EventIndex {
         let has_call_ref: bool = {
             let mut statement = connection.prepare("PRAGMA table_info(events)").map_err(|e| e.to_string())?;
             let columns = statement.query_map([], |row| row.get::<_, String>(1)).map_err(|e| e.to_string())?;
-            columns.filter_map(Result::ok).any(|name| name == "call_ref")
+            let has_call_ref = columns
+                .filter_map(Result::ok)
+                .any(|name| name == "call_ref");
+            has_call_ref
         };
         if !has_call_ref {
             connection.execute("ALTER TABLE events ADD COLUMN call_ref TEXT", []).map_err(|e| e.to_string())?;
