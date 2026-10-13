@@ -29,6 +29,7 @@ pub async fn run() -> Result<(), String> {
     let protected = Router::new()
         .route("/", get(home))
         .route("/api/search", get(search))
+        .route("/api/context", get(event_context))
         .route("/api/stats", get(stats))
         .route("/api/timeline", get(timeline))
         .route("/api/calls", get(calls))
@@ -61,6 +62,23 @@ async fn home() -> Html<&'static str> { Html(include_str!("../web/index.html")) 
 async fn stats(State(state):State<AppState>) -> Result<Json<Stats>,(StatusCode,String)> {
     let db=state.db.lock().map_err(internal)?; let (sources,events,levels)=db.stats().map_err(internal)?; Ok(Json(Stats{sources,events,levels}))
 }
+
+#[derive(Deserialize)] struct ContextQuery { source: String, start_line: usize, end_line: Option<usize> }
+#[derive(Serialize)] struct EventContext { previous: Vec<EventResult>, current: Option<EventResult>, next: Vec<EventResult> }
+async fn event_context(State(state):State<AppState>, Query(q):Query<ContextQuery>) -> Result<Json<EventContext>,(StatusCode,String)> {
+    let end_line = q.end_line.unwrap_or(q.start_line).max(q.start_line);
+    let filters = SearchFilters { source: Some(q.source.clone()), limit: 10000, offset: 0, ..Default::default() };
+    let db = state.db.lock().map_err(internal)?;
+    let mut rows = db.search(&filters).map_err(internal)?;
+    rows.sort_by(|a,b| a.start_line.cmp(&b.start_line));
+    let pivot = rows.iter().position(|e| e.start_line == q.start_line);
+    let Some(pivot) = pivot else { return Ok(Json(EventContext { previous: Vec::new(), current: None, next: Vec::new() })); };
+    let previous = rows[..pivot].iter().rev().take(2).cloned().collect::<Vec<_>>().into_iter().rev().map(to_result).collect();
+    let current = Some(to_result(rows[pivot].clone()));
+    let next = rows.iter().skip(pivot+1).filter(|e| e.start_line > end_line).take(2).cloned().map(to_result).collect();
+    Ok(Json(EventContext { previous, current, next }))
+}
+
 async fn search(State(state):State<AppState>, Query(q):Query<SearchQuery>) -> Result<Json<Vec<EventResult>>,(StatusCode,String)> {
     let filters=SearchFilters{call_id:nonempty(q.call_id),flow_id:nonempty(q.flow_id),call_ref:nonempty(q.call_ref),text:nonempty(q.text),level:nonempty(q.level),from:nonempty(q.from),to:nonempty(q.to),limit:q.limit.unwrap_or(100).min(500),offset:q.offset.unwrap_or(0),..Default::default()};
     let db=state.db.lock().map_err(internal)?; let events=db.search(&filters).map_err(internal)?;
@@ -93,10 +111,11 @@ async fn timeline(State(state):State<AppState>, Query(q):Query<TimelineQuery>) -
 }
 
 async fn diagnostics(State(state):State<AppState>, Query(q):Query<TimelineQuery>) -> Result<Json<DiagnosticsResponse>,(StatusCode,String)> {
-    let filters=if let Some(id)=nonempty(q.call_ref) { SearchFilters{call_ref:Some(id),from:nonempty(q.from),to:nonempty(q.to),text:nonempty(q.text),limit:q.limit.unwrap_or(5000).min(10000),offset:0,..Default::default()} }
-        else if let Some(id)=nonempty(q.call_id) { SearchFilters{call_id:Some(id),limit:q.limit.unwrap_or(5000).min(10000),offset:0,..Default::default()} }
-        else if let Some(id)=nonempty(q.flow_id) { SearchFilters{flow_id:Some(id),limit:q.limit.unwrap_or(5000).min(10000),offset:0,..Default::default()} }
-        else { SearchFilters{limit:q.limit.unwrap_or(5000).min(10000),offset:0,..Default::default()} };
+    let filters=SearchFilters {
+        call_ref: nonempty(q.call_ref), call_id: nonempty(q.call_id), flow_id: nonempty(q.flow_id),
+        from: nonempty(q.from), to: nonempty(q.to), text: nonempty(q.text),
+        limit:q.limit.unwrap_or(5000).min(10000), offset:0, ..Default::default()
+    };
     let rows={ let db=state.db.lock().map_err(internal)?; db.search(&filters).map_err(internal)? };
     let engine=RuleEngine::from_script(include_str!("../rules/default.lua")).map_err(internal)?;
     let mut findings=Vec::new(); let scanned=rows.len();
