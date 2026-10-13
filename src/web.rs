@@ -15,10 +15,8 @@ use crate::{EventIndex, SearchFilters, inspect_archive, LogEvent, LogLevel, Rule
 #[derive(Clone)] struct AppState { db: Arc<Mutex<EventIndex>>, data_dir: PathBuf, shared_dir: PathBuf, users: Arc<Vec<(String,String)>> }
 #[derive(Serialize)] struct ApiMessage { ok: bool, message: String }
 #[derive(Serialize)] struct Stats { sources: usize, events: usize, levels: Vec<(String,usize)> }
-#[derive(Serialize)] struct EventResult { timestamp:String, level:String, message:String, source:String, start_line:usize, end_line:usize, call_id:Option<String>, flow_id:Option<String>, component:Option<String> }
-#[derive(Deserialize)] struct SearchQuery { call_id:Option<String>, flow_id:Option<String>, text:Option<String>, level:Option<String>, from:Option<String>, to:Option<String>, limit:Option<usize>, offset:Option<usize> }
-#[derive(Deserialize)] struct IdentifierQuery { kind: Option<String>, q: Option<String>, limit: Option<usize>, offset: Option<usize> }
-#[derive(Serialize)] struct IdentifierResult { id: String, events: usize, first_timestamp: String, last_timestamp: String }
+#[derive(Serialize)] struct EventResult { timestamp:String, level:String, message:String, raw:String, source:String, start_line:usize, end_line:usize, call_id:Option<String>, flow_id:Option<String>, component:Option<String>, call_ref:Option<String> }
+#[derive(Deserialize)] struct SearchQuery { call_id:Option<String>, flow_id:Option<String>, call_ref:Option<String>, text:Option<String>, level:Option<String>, from:Option<String>, to:Option<String>, limit:Option<usize>, offset:Option<usize> }
 
 pub async fn run() -> Result<(), String> {
     let data_dir = PathBuf::from(env::var("DATA_DIR").unwrap_or_else(|_| "/data".into()));
@@ -31,9 +29,9 @@ pub async fn run() -> Result<(), String> {
     let protected = Router::new()
         .route("/", get(home))
         .route("/api/search", get(search))
-        .route("/api/identifiers", get(identifiers))
         .route("/api/stats", get(stats))
         .route("/api/timeline", get(timeline))
+        .route("/api/calls", get(calls))
         .route("/api/diagnostics", get(diagnostics))
         .route("/api/rules", get(rules_catalog))
         .route("/api/upload", post(upload))
@@ -63,25 +61,27 @@ async fn home() -> Html<&'static str> { Html(include_str!("../web/index.html")) 
 async fn stats(State(state):State<AppState>) -> Result<Json<Stats>,(StatusCode,String)> {
     let db=state.db.lock().map_err(internal)?; let (sources,events,levels)=db.stats().map_err(internal)?; Ok(Json(Stats{sources,events,levels}))
 }
-async fn identifiers(State(state): State<AppState>, Query(q): Query<IdentifierQuery>) -> Result<Json<Vec<IdentifierResult>>, (StatusCode, String)> {
-    let kind = q.kind.as_deref().unwrap_or("call");
-    let db = state.db.lock().map_err(internal)?;
-    let rows = db.list_identifiers(kind, q.q.as_deref(), q.limit.unwrap_or(100), q.offset.unwrap_or(0)).map_err(internal)?;
-    Ok(Json(rows.into_iter().map(|r| IdentifierResult { id:r.id, events:r.events, first_timestamp:r.first_timestamp, last_timestamp:r.last_timestamp }).collect()))
-}
-
 async fn search(State(state):State<AppState>, Query(q):Query<SearchQuery>) -> Result<Json<Vec<EventResult>>,(StatusCode,String)> {
-    let filters=SearchFilters{call_id:nonempty(q.call_id),flow_id:nonempty(q.flow_id),text:nonempty(q.text),level:nonempty(q.level),from:nonempty(q.from),to:nonempty(q.to),limit:q.limit.unwrap_or(100).min(500),offset:q.offset.unwrap_or(0),..Default::default()};
+    let filters=SearchFilters{call_id:nonempty(q.call_id),flow_id:nonempty(q.flow_id),call_ref:nonempty(q.call_ref),text:nonempty(q.text),level:nonempty(q.level),from:nonempty(q.from),to:nonempty(q.to),limit:q.limit.unwrap_or(100).min(500),offset:q.offset.unwrap_or(0),..Default::default()};
     let db=state.db.lock().map_err(internal)?; let events=db.search(&filters).map_err(internal)?;
     Ok(Json(events.into_iter().map(to_result).collect()))
 }
 
+#[derive(Serialize)] struct CallRefResult { id: String, events: usize, first_timestamp: String, last_timestamp: String }
+#[derive(Deserialize)] struct CallsQuery { from: Option<String>, to: Option<String>, text: Option<String>, limit: Option<usize> }
+async fn calls(State(state):State<AppState>, Query(q):Query<CallsQuery>) -> Result<Json<Vec<CallRefResult>>,(StatusCode,String)> {
+    let db=state.db.lock().map_err(internal)?;
+    let rows=db.list_call_refs(nonempty(q.from).as_deref(),nonempty(q.to).as_deref(),nonempty(q.text).as_deref(),q.limit.unwrap_or(200)).map_err(internal)?;
+    Ok(Json(rows.into_iter().map(|(id,events,first_timestamp,last_timestamp)| CallRefResult{id,events,first_timestamp,last_timestamp}).collect()))
+}
+
 #[derive(Serialize)] struct TimelineResponse { key: String, id: String, total: usize, errors: usize, first_timestamp: String, last_timestamp: String, events: Vec<EventResult> }
 #[derive(Serialize)] struct DiagnosticsResponse { scanned_events: usize, findings: Vec<crate::Finding> }
-#[derive(Deserialize)] struct TimelineQuery { call_id: Option<String>, flow_id: Option<String>, limit: Option<usize> }
+#[derive(Deserialize)] struct TimelineQuery { call_id: Option<String>, flow_id: Option<String>, call_ref: Option<String>, from: Option<String>, to: Option<String>, text: Option<String>, limit: Option<usize> }
 
 async fn timeline(State(state):State<AppState>, Query(q):Query<TimelineQuery>) -> Result<Json<TimelineResponse>,(StatusCode,String)> {
-    let (key,id,filters) = if let Some(id)=nonempty(q.call_id) { ("CallID",id.clone(),SearchFilters{call_id:Some(id),limit:q.limit.unwrap_or(10000).min(10000),offset:0,..Default::default()}) }
+    let (key,id,filters) = if let Some(id)=nonempty(q.call_ref) { ("Execução",id.clone(),SearchFilters{call_ref:Some(id),from:nonempty(q.from),to:nonempty(q.to),text:nonempty(q.text),limit:q.limit.unwrap_or(10000).min(10000),offset:0,..Default::default()}) }
+        else if let Some(id)=nonempty(q.call_id) { ("CallID",id.clone(),SearchFilters{call_id:Some(id),limit:q.limit.unwrap_or(10000).min(10000),offset:0,..Default::default()}) }
         else if let Some(id)=nonempty(q.flow_id) { ("FlowID",id.clone(),SearchFilters{flow_id:Some(id),limit:q.limit.unwrap_or(10000).min(10000),offset:0,..Default::default()}) }
         else { return Err((StatusCode::BAD_REQUEST,"Informe call_id ou flow_id".into())); };
     let db=state.db.lock().map_err(internal)?; let mut rows=db.search(&filters).map_err(internal)?;
@@ -93,7 +93,8 @@ async fn timeline(State(state):State<AppState>, Query(q):Query<TimelineQuery>) -
 }
 
 async fn diagnostics(State(state):State<AppState>, Query(q):Query<TimelineQuery>) -> Result<Json<DiagnosticsResponse>,(StatusCode,String)> {
-    let filters=if let Some(id)=nonempty(q.call_id) { SearchFilters{call_id:Some(id),limit:q.limit.unwrap_or(5000).min(10000),offset:0,..Default::default()} }
+    let filters=if let Some(id)=nonempty(q.call_ref) { SearchFilters{call_ref:Some(id),from:nonempty(q.from),to:nonempty(q.to),text:nonempty(q.text),limit:q.limit.unwrap_or(5000).min(10000),offset:0,..Default::default()} }
+        else if let Some(id)=nonempty(q.call_id) { SearchFilters{call_id:Some(id),limit:q.limit.unwrap_or(5000).min(10000),offset:0,..Default::default()} }
         else if let Some(id)=nonempty(q.flow_id) { SearchFilters{flow_id:Some(id),limit:q.limit.unwrap_or(5000).min(10000),offset:0,..Default::default()} }
         else { SearchFilters{limit:q.limit.unwrap_or(5000).min(10000),offset:0,..Default::default()} };
     let rows={ let db=state.db.lock().map_err(internal)?; db.search(&filters).map_err(internal)? };
@@ -101,7 +102,7 @@ async fn diagnostics(State(state):State<AppState>, Query(q):Query<TimelineQuery>
     let mut findings=Vec::new(); let scanned=rows.len();
     for row in rows { let event=to_log_event(row); findings.extend(engine.diagnose(&event).map_err(internal)?); }
     findings.sort_by(|a,b| severity_rank(&a.severity).cmp(&severity_rank(&b.severity)).then(a.timestamp.cmp(&b.timestamp)));
-    findings.dedup_by(|a,b| a.rule_id==b.rule_id && a.start_line==b.start_line && a.call_id==b.call_id && a.flow_id==b.flow_id);
+    findings.dedup_by(|a,b| a.rule_id==b.rule_id && a.start_line==b.start_line && a.call_id==b.call_id && a.flow_id==b.flow_id && a.call_ref==b.call_ref);
     Ok(Json(DiagnosticsResponse{scanned_events:scanned,findings}))
 }
 
@@ -110,8 +111,8 @@ async fn rules_catalog() -> Result<Json<Vec<crate::diagnostics::RuleSummary>>,(S
     Ok(Json(engine.summaries()))
 }
 fn severity_rank(s:&str)->u8 { match s.to_ascii_lowercase().as_str() { "critical"|"fatal"=>0,"error"=>1,"warning"|"warn"=>2,_=>3 } }
-fn to_result(e:crate::IndexedEvent)->EventResult { EventResult{timestamp:e.timestamp,level:e.level,message:e.message,source:e.indexed_source,start_line:e.start_line,end_line:e.end_line,call_id:e.call_id,flow_id:e.flow_id,component:e.component} }
-fn to_log_event(e:crate::IndexedEvent)->LogEvent { LogEvent{timestamp:e.timestamp,thread_id:e.thread_id,level:LogLevel::parse(&e.level),source:e.source_name,message:e.message.clone(),raw:e.message,start_line:e.start_line,end_line:e.end_line,flow_id:e.flow_id,call_id:e.call_id,component:e.component} }
+fn to_result(e:crate::IndexedEvent)->EventResult { EventResult{timestamp:e.timestamp,level:e.level,message:e.message,raw:e.raw,source:e.indexed_source,start_line:e.start_line,end_line:e.end_line,call_id:e.call_id,flow_id:e.flow_id,component:e.component,call_ref:e.call_ref} }
+fn to_log_event(e:crate::IndexedEvent)->LogEvent { LogEvent{timestamp:e.timestamp,thread_id:e.thread_id,level:LogLevel::parse(&e.level),source:e.source_name,message:e.message.clone(),raw:e.raw,start_line:e.start_line,end_line:e.end_line,flow_id:e.flow_id,call_id:e.call_id,component:e.component,call_ref:e.call_ref} }
 
 fn nonempty(v:Option<String>)->Option<String>{v.map(|x|x.trim().to_string()).filter(|x|!x.is_empty())}
 fn internal<E:ToString>(e:E)->(StatusCode,String){(StatusCode::INTERNAL_SERVER_ERROR,e.to_string())}

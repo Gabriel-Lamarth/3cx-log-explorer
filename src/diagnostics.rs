@@ -16,6 +16,7 @@ pub struct Finding {
     pub call_id: Option<String>,
     pub flow_id: Option<String>,
     pub component: Option<String>,
+    pub call_ref: Option<String>,
 }
 
 /// Executes user-selected Lua rules with safe standard libraries only.
@@ -86,6 +87,7 @@ impl RuleEngine {
         event_table.set("flow_id", event.flow_id.as_deref().unwrap_or(""))?;
         event_table.set("call_id", event.call_id.as_deref().unwrap_or(""))?;
         event_table.set("component", event.component.as_deref().unwrap_or(""))?;
+        event_table.set("call_ref", event.call_ref.as_deref().unwrap_or(""))?;
         event_table.set("start_line", event.start_line)?;
         event_table.set("end_line", event.end_line)?;
 
@@ -103,6 +105,7 @@ impl RuleEngine {
                     call_id: event.call_id.clone(),
                     flow_id: event.flow_id.clone(),
                     component: event.component.clone(),
+                    call_ref: event.call_ref.clone(),
                 });
             }
         }

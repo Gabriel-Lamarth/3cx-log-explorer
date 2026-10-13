@@ -15,6 +15,7 @@ pub struct SearchFilters {
     pub call_id: Option<String>,
     pub flow_id: Option<String>,
     pub component: Option<String>,
+    pub call_ref: Option<String>,
     pub level: Option<String>,
     pub text: Option<String>,
     pub from: Option<String>,
@@ -31,20 +32,14 @@ pub struct IndexedEvent {
     pub level: String,
     pub source_name: Option<String>,
     pub message: String,
+    pub raw: String,
     pub start_line: usize,
     pub end_line: usize,
     pub flow_id: Option<String>,
     pub call_id: Option<String>,
     pub component: Option<String>,
+    pub call_ref: Option<String>,
     pub indexed_source: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct IdentifierSummary {
-    pub id: String,
-    pub events: usize,
-    pub first_timestamp: String,
-    pub last_timestamp: String,
 }
 
 pub struct EventIndex {
@@ -76,7 +71,8 @@ impl EventIndex {
                  end_line INTEGER NOT NULL,
                  flow_id TEXT,
                  call_id TEXT,
-                 component TEXT
+                 component TEXT,
+                 call_ref TEXT
              );
              CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
              CREATE INDEX IF NOT EXISTS idx_events_level ON events(level);
@@ -86,6 +82,16 @@ impl EventIndex {
              CREATE INDEX IF NOT EXISTS idx_events_source_id ON events(source_id);
              CREATE VIRTUAL TABLE IF NOT EXISTS event_fts USING fts5(message, content='events', content_rowid='id');"
         ).map_err(|e| e.to_string())?;
+        // Safe migration for databases created before call-reference indexing.
+        let has_call_ref: bool = {
+            let mut statement = connection.prepare("PRAGMA table_info(events)").map_err(|e| e.to_string())?;
+            let columns = statement.query_map([], |row| row.get::<_, String>(1)).map_err(|e| e.to_string())?;
+            columns.filter_map(Result::ok).any(|name| name == "call_ref")
+        };
+        if !has_call_ref {
+            connection.execute("ALTER TABLE events ADD COLUMN call_ref TEXT", []).map_err(|e| e.to_string())?;
+        }
+        connection.execute("CREATE INDEX IF NOT EXISTS idx_events_call_ref ON events(call_ref)", []).map_err(|e| e.to_string())?;
         Ok(Self { connection })
     }
 
@@ -148,8 +154,8 @@ impl EventIndex {
             let mut statement = transaction.prepare(
                 "INSERT INTO events (
                     source_id, timestamp, thread_id, level, source_name, message, raw,
-                    start_line, end_line, flow_id, call_id, component
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"
+                    start_line, end_line, flow_id, call_id, component, call_ref
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)"
             ).map_err(|e| e.to_string())?;
             let mut fts_statement = transaction.prepare("INSERT INTO event_fts(rowid, message) VALUES (?1, ?2)").map_err(|e| e.to_string())?;
             let mut insert_event = |event: LogEvent| {
@@ -161,12 +167,13 @@ impl EventIndex {
                     event.level.as_str(),
                     event.source,
                     event.message,
-                    "", // Original bytes remain in the source file; avoid storing the same text twice.
+                    event.raw, // Preserve the original line and continuations for the source viewer.
                     event.start_line as i64,
                     event.end_line as i64,
                     event.flow_id,
                     event.call_id,
                     event.component,
+                    event.call_ref,
                 ]);
                 match result {
                     Ok(_) => {
@@ -191,14 +198,15 @@ impl EventIndex {
 
     pub fn search(&self, filters: &SearchFilters) -> Result<Vec<IndexedEvent>, String> {
         let mut sql = String::from(
-            "SELECT e.timestamp, e.thread_id, e.level, e.source_name, e.message,
-                    e.start_line, e.end_line, e.flow_id, e.call_id, e.component, s.source
+            "SELECT e.timestamp, e.thread_id, e.level, e.source_name, e.message, e.raw,
+                    e.start_line, e.end_line, e.flow_id, e.call_id, e.component, e.call_ref, s.source
              FROM events e JOIN sources s ON s.id = e.source_id WHERE 1=1"
         );
         let mut values: Vec<Value> = Vec::new();
         push_filter(&mut sql, &mut values, "e.call_id", filters.call_id.as_deref());
         push_filter(&mut sql, &mut values, "e.flow_id", filters.flow_id.as_deref());
         push_filter(&mut sql, &mut values, "e.component", filters.component.as_deref());
+        push_filter(&mut sql, &mut values, "e.call_ref", filters.call_ref.as_deref());
         push_filter(&mut sql, &mut values, "e.level", filters.level.as_deref());
         push_filter(&mut sql, &mut values, "s.source", filters.source.as_deref());
         if let Some(text) = filters.text.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
@@ -227,34 +235,40 @@ impl EventIndex {
                 level: row.get(2)?,
                 source_name: row.get(3)?,
                 message: row.get(4)?,
-                start_line: row.get::<_, i64>(5)? as usize,
-                end_line: row.get::<_, i64>(6)? as usize,
-                flow_id: row.get(7)?,
-                call_id: row.get(8)?,
-                component: row.get(9)?,
-                indexed_source: row.get(10)?,
+                raw: row.get(5)?,
+                start_line: row.get::<_, i64>(6)? as usize,
+                end_line: row.get::<_, i64>(7)? as usize,
+                flow_id: row.get(8)?,
+                call_id: row.get(9)?,
+                component: row.get(10)?,
+                call_ref: row.get(11)?,
+                indexed_source: row.get(12)?,
             })
         }).map_err(|e| e.to_string())?;
         rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
     }
 
-    /// Return distinct CallIDs or FlowIDs with counts and time bounds. Uses indexed columns.
-    pub fn list_identifiers(&self, kind: &str, query: Option<&str>, limit: usize, offset: usize) -> Result<Vec<IdentifierSummary>, String> {
-        let column = match kind { "call" => "call_id", "flow" => "flow_id", _ => return Err("kind deve ser call ou flow".into()) };
-        let mut sql = format!("SELECT {column}, COUNT(*), MIN(timestamp), MAX(timestamp) FROM events WHERE {column} IS NOT NULL AND {column} != ''");
+    pub fn list_call_refs(&self, from: Option<&str>, to: Option<&str>, text: Option<&str>, limit: usize)
+        -> Result<Vec<(String, usize, String, String)>, String>
+    {
+        let mut sql = String::from(
+            "SELECT e.call_ref, COUNT(*), MIN(e.timestamp), MAX(e.timestamp)
+             FROM events e WHERE e.call_ref IS NOT NULL AND e.call_ref <> ''"
+        );
         let mut values: Vec<Value> = Vec::new();
-        if let Some(q) = query.map(str::trim).filter(|q| !q.is_empty()) {
-            sql.push_str(&format!(" AND {column} LIKE ?"));
-            values.push(Value::Text(format!("%{}%", q.replace('%', "\\%").replace('_', "\\_"))));
+        if let Some(from) = from { sql.push_str(" AND e.timestamp >= ?"); values.push(Value::Text(from.to_string())); }
+        if let Some(to) = to { sql.push_str(" AND e.timestamp <= ?"); values.push(Value::Text(to.to_string())); }
+        if let Some(text) = text.map(str::trim).filter(|s| !s.is_empty()) {
+            let query = text.split_whitespace().map(|word| format!("\"{}\"", word.replace('\"', ""))).collect::<Vec<_>>().join(" AND ");
+            sql.push_str(" AND e.id IN (SELECT rowid FROM event_fts WHERE message MATCH ?)");
+            values.push(Value::Text(query));
         }
-        sql.push_str(&format!(" GROUP BY {column} ORDER BY MAX(timestamp) DESC, {column} ASC LIMIT ? OFFSET ?"));
-        values.push(Value::Integer(limit.clamp(1, 500) as i64));
-        values.push(Value::Integer(offset.min(i64::MAX as usize) as i64));
+        sql.push_str(" GROUP BY e.call_ref ORDER BY MIN(e.timestamp), e.call_ref LIMIT ?");
+        values.push(Value::Integer(limit.clamp(1, 1000) as i64));
         let mut statement = self.connection.prepare(&sql).map_err(|e| e.to_string())?;
-        let rows = statement.query_map(params_from_iter(values.iter()), |row| Ok(IdentifierSummary {
-            id: row.get(0)?, events: row.get::<_, i64>(1)? as usize,
-            first_timestamp: row.get(2)?, last_timestamp: row.get(3)?,
-        })).map_err(|e| e.to_string())?;
+        let rows = statement.query_map(params_from_iter(values.iter()), |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize, row.get(2)?, row.get(3)?))
+        }).map_err(|e| e.to_string())?;
         rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
     }
 
@@ -290,5 +304,5 @@ fn keep_compact_event(event: &LogEvent) -> bool {
     let important = ["exception", "failed", "failure", "error", "timeout", "timed out", "unauthorized", "forbidden", "rejected", "disconnect", "terminated", "cancel", "unreachable", "refused", "not found", "503", "500", "408", "486", "401", "407", "authentication", "denied", "crash", "panic", "invite", "bye", "ack", "connectionstatus", "connected", "disconnected", "call terminated", "call has been removed", "switching executing mode", "oncallterminated", "transfer", "route to", "route", "session", "sip/2.0"];
     if important.iter().any(|needle| text.contains(needle)) { return true; }
     if matches!(level.as_str(), "trace" | "debug") { return false; }
-    event.call_id.is_some() || event.flow_id.is_some() || !matches!(level.as_str(), "trace" | "debug")
+    event.call_id.is_some() || event.flow_id.is_some() || event.call_ref.is_some() || !matches!(level.as_str(), "trace" | "debug")
 }

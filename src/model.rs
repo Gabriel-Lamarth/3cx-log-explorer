@@ -59,4 +59,5 @@ pub struct LogEvent {
     pub flow_id: Option<String>,
     pub call_id: Option<String>,
     pub component: Option<String>,
+    pub call_ref: Option<String>,
 }

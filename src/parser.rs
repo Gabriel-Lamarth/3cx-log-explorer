@@ -85,6 +85,7 @@ fn parse_record(line: &str, line_number: usize) -> Option<LogEvent> {
         flow_id: extract_flow_id(&message),
         call_id: extract_call_id(&message),
         component: extract_component(&message),
+        call_ref: extract_call_ref(&message),
         message,
         raw: line.to_string(),
         start_line: line_number,
@@ -141,6 +142,33 @@ fn extract_flow_id(message: &str) -> Option<String> {
     Some(format!("{}.Callflow.{}", &message[start..marker_index], &suffix[..flow_number_len]))
 }
 
+
+/// Extracts execution references such as `_8510_44.Main.624` from CallFlow logs.
+fn extract_call_ref(message: &str) -> Option<String> {
+    let bytes = message.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'_' { i += 1; continue; }
+        let start = i;
+        i += 1;
+        let first = i;
+        while i < bytes.len() && bytes[i].is_ascii_digit() { i += 1; }
+        if i == first || i >= bytes.len() || bytes[i] != b'_' { i = start + 1; continue; }
+        i += 1;
+        let second = i;
+        while i < bytes.len() && bytes[i].is_ascii_digit() { i += 1; }
+        if i == second || !message[i..].starts_with(".Main.") { i = start + 1; continue; }
+        i += ".Main.".len();
+        let third = i;
+        while i < bytes.len() && bytes[i].is_ascii_digit() { i += 1; }
+        if i > third {
+            return Some(message[start..i].to_string());
+        }
+        i = start + 1;
+    }
+    None
+}
+
 fn extract_component(message: &str) -> Option<String> {
     // Most CFD messages identify the active component as [C:x.y]-name.
     if let Some(marker) = message.find("[C:") {
@@ -167,4 +195,26 @@ fn extract_component(message: &str) -> Option<String> {
         }
     }
     None
+}
+
+
+#[cfg(test)]
+mod call_ref_tests {
+    use super::parse_text;
+
+    #[test]
+    fn extracts_main_execution_reference() {
+        let input = "2026-10-13 11:07:10.464|0005|Info|[_3CX.Script] _8510_44.Main.624. Starting execution";
+        let events = parse_text(input);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].call_ref.as_deref(), Some("_8510_44.Main.624"));
+    }
+
+    #[test]
+    fn does_not_confuse_call_ref_with_flow_id() {
+        let input = "2026-10-13 11:07:10.464|0005|Info|[_3CX.Script] _8510_44.Main.624. Foo.Callflow.12.";
+        let events = parse_text(input);
+        assert_eq!(events[0].call_ref.as_deref(), Some("_8510_44.Main.624"));
+        assert_eq!(events[0].flow_id.as_deref(), Some("Foo.Callflow.12"));
+    }
 }

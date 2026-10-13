@@ -16,4 +16,4 @@ Abra `http://localhost:8080`. Por padrão, o banco fica em `/data`; em desenvolv
 
 ## Importante
 
-Esta é uma primeira implementação funcional proposta para testes, não uma migração concluída de todas as telas Tauri. A interface web cobre importação, pesquisa e estatísticas. Timeline visual, grafo, regras Lua e exportação de relatório ainda precisam ser integrados à interface web. Teste com cópias anonimizadas de logs antes de utilizar em produção.
+Esta versão inclui a lista de referências de execução `*.Main.*`, cronologia e fluxograma sequencial por referência, diagnósticos filtrados e exibição do texto bruto indexado. O fluxograma é uma sequência temporal dos eventos detectados, não uma reconstrução semântica de ramificações. Consulte `docs/web-analysis.md` para detalhes e para reindexar fontes já existentes. Teste com cópias anonimizadas de logs antes de utilizar em produção.
