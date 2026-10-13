@@ -275,6 +275,14 @@ impl EventIndex {
         rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
     }
 
+    pub fn list_identifiers(&self, kind: &str, limit: usize) -> Result<Vec<String>, String> {
+        let column = match kind { "call_id" => "call_id", "flow_id" => "flow_id", _ => return Err("tipo de identificador inválido".into()) };
+        let sql = format!("SELECT DISTINCT {column} FROM events WHERE {column} IS NOT NULL AND {column} <> '' ORDER BY {column} LIMIT ?1");
+        let mut statement = self.connection.prepare(&sql).map_err(|e| e.to_string())?;
+        let rows = statement.query_map(params![limit.clamp(1, 5000) as i64], |row| row.get::<_, String>(0)).map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    }
+
     pub fn stats(&self) -> Result<(usize, usize, Vec<(String, usize)>), String> {
         let sources: i64 = self.connection.query_row("SELECT COUNT(*) FROM sources", [], |r| r.get(0))
             .map_err(|e| e.to_string())?;

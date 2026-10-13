@@ -33,6 +33,7 @@ pub async fn run() -> Result<(), String> {
         .route("/api/stats", get(stats))
         .route("/api/timeline", get(timeline))
         .route("/api/calls", get(calls))
+        .route("/api/identifiers", get(identifiers))
         .route("/api/diagnostics", get(diagnostics))
         .route("/api/rules", get(rules_catalog))
         .route("/api/upload", post(upload))
@@ -63,11 +64,11 @@ async fn stats(State(state):State<AppState>) -> Result<Json<Stats>,(StatusCode,S
     let db=state.db.lock().map_err(internal)?; let (sources,events,levels)=db.stats().map_err(internal)?; Ok(Json(Stats{sources,events,levels}))
 }
 
-#[derive(Deserialize)] struct ContextQuery { source: String, start_line: usize, end_line: Option<usize> }
+#[derive(Deserialize)] struct ContextQuery { source: String, start_line: usize, end_line: Option<usize>, call_id: Option<String>, flow_id: Option<String>, call_ref: Option<String> }
 #[derive(Serialize)] struct EventContext { previous: Vec<EventResult>, current: Option<EventResult>, next: Vec<EventResult> }
 async fn event_context(State(state):State<AppState>, Query(q):Query<ContextQuery>) -> Result<Json<EventContext>,(StatusCode,String)> {
     let end_line = q.end_line.unwrap_or(q.start_line).max(q.start_line);
-    let filters = SearchFilters { source: Some(q.source.clone()), limit: 10000, offset: 0, ..Default::default() };
+    let filters = SearchFilters { source: Some(q.source.clone()), call_id: nonempty(q.call_id), flow_id: nonempty(q.flow_id), call_ref: nonempty(q.call_ref), limit: 10000, offset: 0, ..Default::default() };
     let db = state.db.lock().map_err(internal)?;
     let mut rows = db.search(&filters).map_err(internal)?;
     rows.sort_by(|a,b| a.start_line.cmp(&b.start_line));
@@ -91,6 +92,12 @@ async fn calls(State(state):State<AppState>, Query(q):Query<CallsQuery>) -> Resu
     let db=state.db.lock().map_err(internal)?;
     let rows=db.list_call_refs(nonempty(q.from).as_deref(),nonempty(q.to).as_deref(),nonempty(q.text).as_deref(),q.limit.unwrap_or(200)).map_err(internal)?;
     Ok(Json(rows.into_iter().map(|(id,events,first_timestamp,last_timestamp)| CallRefResult{id,events,first_timestamp,last_timestamp}).collect()))
+}
+
+#[derive(Deserialize)] struct IdentifiersQuery { kind: String, limit: Option<usize> }
+async fn identifiers(State(state):State<AppState>, Query(q):Query<IdentifiersQuery>) -> Result<Json<Vec<String>>,(StatusCode,String)> {
+    let db=state.db.lock().map_err(internal)?;
+    Ok(Json(db.list_identifiers(&q.kind, q.limit.unwrap_or(2000)).map_err(internal)?))
 }
 
 #[derive(Serialize)] struct TimelineResponse { key: String, id: String, total: usize, errors: usize, first_timestamp: String, last_timestamp: String, events: Vec<EventResult> }
