@@ -39,6 +39,14 @@ pub struct IndexedEvent {
     pub indexed_source: String,
 }
 
+#[derive(Clone, Debug)]
+pub struct IdentifierSummary {
+    pub id: String,
+    pub events: usize,
+    pub first_timestamp: String,
+    pub last_timestamp: String,
+}
+
 pub struct EventIndex {
     connection: Connection,
 }
@@ -227,6 +235,26 @@ impl EventIndex {
                 indexed_source: row.get(10)?,
             })
         }).map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    }
+
+    /// Return distinct CallIDs or FlowIDs with counts and time bounds. Uses indexed columns.
+    pub fn list_identifiers(&self, kind: &str, query: Option<&str>, limit: usize, offset: usize) -> Result<Vec<IdentifierSummary>, String> {
+        let column = match kind { "call" => "call_id", "flow" => "flow_id", _ => return Err("kind deve ser call ou flow".into()) };
+        let mut sql = format!("SELECT {column}, COUNT(*), MIN(timestamp), MAX(timestamp) FROM events WHERE {column} IS NOT NULL AND {column} != ''");
+        let mut values: Vec<Value> = Vec::new();
+        if let Some(q) = query.map(str::trim).filter(|q| !q.is_empty()) {
+            sql.push_str(&format!(" AND {column} LIKE ?"));
+            values.push(Value::Text(format!("%{}%", q.replace('%', "\\%").replace('_', "\\_"))));
+        }
+        sql.push_str(&format!(" GROUP BY {column} ORDER BY MAX(timestamp) DESC, {column} ASC LIMIT ? OFFSET ?"));
+        values.push(Value::Integer(limit.clamp(1, 500) as i64));
+        values.push(Value::Integer(offset.min(i64::MAX as usize) as i64));
+        let mut statement = self.connection.prepare(&sql).map_err(|e| e.to_string())?;
+        let rows = statement.query_map(params_from_iter(values.iter()), |row| Ok(IdentifierSummary {
+            id: row.get(0)?, events: row.get::<_, i64>(1)? as usize,
+            first_timestamp: row.get(2)?, last_timestamp: row.get(3)?,
+        })).map_err(|e| e.to_string())?;
         rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
     }
 

@@ -17,6 +17,8 @@ use crate::{EventIndex, SearchFilters, inspect_archive, LogEvent, LogLevel, Rule
 #[derive(Serialize)] struct Stats { sources: usize, events: usize, levels: Vec<(String,usize)> }
 #[derive(Serialize)] struct EventResult { timestamp:String, level:String, message:String, source:String, start_line:usize, end_line:usize, call_id:Option<String>, flow_id:Option<String>, component:Option<String> }
 #[derive(Deserialize)] struct SearchQuery { call_id:Option<String>, flow_id:Option<String>, text:Option<String>, level:Option<String>, from:Option<String>, to:Option<String>, limit:Option<usize>, offset:Option<usize> }
+#[derive(Deserialize)] struct IdentifierQuery { kind: Option<String>, q: Option<String>, limit: Option<usize>, offset: Option<usize> }
+#[derive(Serialize)] struct IdentifierResult { id: String, events: usize, first_timestamp: String, last_timestamp: String }
 
 pub async fn run() -> Result<(), String> {
     let data_dir = PathBuf::from(env::var("DATA_DIR").unwrap_or_else(|_| "/data".into()));
@@ -29,6 +31,7 @@ pub async fn run() -> Result<(), String> {
     let protected = Router::new()
         .route("/", get(home))
         .route("/api/search", get(search))
+        .route("/api/identifiers", get(identifiers))
         .route("/api/stats", get(stats))
         .route("/api/timeline", get(timeline))
         .route("/api/diagnostics", get(diagnostics))
@@ -60,6 +63,13 @@ async fn home() -> Html<&'static str> { Html(include_str!("../web/index.html")) 
 async fn stats(State(state):State<AppState>) -> Result<Json<Stats>,(StatusCode,String)> {
     let db=state.db.lock().map_err(internal)?; let (sources,events,levels)=db.stats().map_err(internal)?; Ok(Json(Stats{sources,events,levels}))
 }
+async fn identifiers(State(state): State<AppState>, Query(q): Query<IdentifierQuery>) -> Result<Json<Vec<IdentifierResult>>, (StatusCode, String)> {
+    let kind = q.kind.as_deref().unwrap_or("call");
+    let db = state.db.lock().map_err(internal)?;
+    let rows = db.list_identifiers(kind, q.q.as_deref(), q.limit.unwrap_or(100), q.offset.unwrap_or(0)).map_err(internal)?;
+    Ok(Json(rows.into_iter().map(|r| IdentifierResult { id:r.id, events:r.events, first_timestamp:r.first_timestamp, last_timestamp:r.last_timestamp }).collect()))
+}
+
 async fn search(State(state):State<AppState>, Query(q):Query<SearchQuery>) -> Result<Json<Vec<EventResult>>,(StatusCode,String)> {
     let filters=SearchFilters{call_id:nonempty(q.call_id),flow_id:nonempty(q.flow_id),text:nonempty(q.text),level:nonempty(q.level),from:nonempty(q.from),to:nonempty(q.to),limit:q.limit.unwrap_or(100).min(500),offset:q.offset.unwrap_or(0),..Default::default()};
     let db=state.db.lock().map_err(internal)?; let events=db.search(&filters).map_err(internal)?;
