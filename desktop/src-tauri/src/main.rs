@@ -21,6 +21,8 @@ struct AppState {
     events: Vec<LogEvent>,
     source: String,
     active_rules: String,
+    source_path: String,
+    source_entry: Option<String>,
 }
 struct Shared(Mutex<AppState>);
 
@@ -261,6 +263,7 @@ fn load_log(
     let mut events = Vec::new();
     let mut zip_logs = Vec::new();
     let source: String;
+    let mut source_entry: Option<String> = None;
     let path_ref = Path::new(&path);
 
     if path_ref
@@ -287,6 +290,7 @@ fn load_log(
             .ok_or_else(|| "Nenhum arquivo .log encontrado no ZIP.".to_string())?;
         read_archive_log(&path, &chosen, |event| events.push(event))
             .map_err(|error| error.to_string())?;
+        source_entry = Some(chosen.clone());
         source = format!("{} :: {}", path, chosen);
     } else {
         let file = File::open(&path)
@@ -310,6 +314,8 @@ fn load_log(
         .map_err(|_| "Estado interno indisponível".to_string())?;
     inner.events = events;
     inner.source = source;
+    inner.source_path = path;
+    inner.source_entry = source_entry;
     Ok(result)
 }
 
@@ -354,16 +360,53 @@ fn save_rule_script(path: String, content: String) -> Result<String, String> {
 
 #[tauri::command]
 fn get_event_raw(line: usize, state: State<'_, Shared>) -> Result<String, String> {
-    let inner = state
-        .0
-        .lock()
-        .map_err(|_| "Estado interno indisponível".to_string())?;
-    inner
-        .events
-        .iter()
-        .find(|event| event.start_line == line)
-        .map(|event| event.raw.clone())
-        .ok_or_else(|| format!("Não foi encontrado evento iniciando na linha {line}."))
+    let (path, entry, start, end, fallback) = {
+        let inner = state
+            .0
+            .lock()
+            .map_err(|_| "Estado interno indisponível".to_string())?;
+        let event = inner.events.iter().find(|event| event.start_line == line)
+            .ok_or_else(|| format!("Não foi encontrado evento iniciando na linha {line}."))?;
+        (
+            inner.source_path.clone(),
+            inner.source_entry.clone(),
+            event.start_line.saturating_sub(2).max(1),
+            event.end_line.saturating_add(2),
+            event.raw.clone(),
+        )
+    };
+
+    // Stream only the requested window instead of duplicating the whole log.
+    let lines: Vec<String> = if path.to_ascii_lowercase().ends_with(".zip") {
+        let file = File::open(&path).map_err(|error| format!("Não foi possível abrir o pacote: {error}"))?;
+        let mut archive = zip::ZipArchive::new(file).map_err(|error| format!("Pacote ZIP inválido: {error}"))?;
+        let name = entry.ok_or_else(|| "O log interno do pacote não foi identificado.".to_string())?;
+        let member = archive.by_name(&name).map_err(|error| format!("Não foi possível abrir o log interno: {error}"))?;
+        collect_context_lines(BufReader::new(member), start, end)?
+    } else {
+        let file = File::open(&path).map_err(|error| format!("Não foi possível reabrir o log: {error}"))?;
+        collect_context_lines(BufReader::new(file), start, end)?
+    };
+
+    if lines.is_empty() { Ok(fallback) } else { Ok(lines.join("\n")) }
+}
+
+fn collect_context_lines<R: std::io::BufRead>(
+    reader: R,
+    start: usize,
+    end: usize,
+) -> Result<Vec<String>, String> {
+    use std::io::BufRead;
+    let mut selected = Vec::new();
+    for (index, line) in reader.lines().enumerate() {
+        let number = index + 1;
+        if number > end { break; }
+        if number >= start {
+            let text = line.map_err(|error| format!("Falha ao ler contexto do log: {error}"))?;
+            selected.push(format!("{number:>7} │ {text}"));
+        }
+    }
+    Ok(selected)
 }
 
 #[tauri::command]
@@ -409,6 +452,8 @@ fn main() {
             events: Vec::new(),
             source: String::new(),
             active_rules: DEFAULT_RULES.to_string(),
+            source_path: String::new(),
+            source_entry: None,
         })))
         .invoke_handler(tauri::generate_handler![
             inspect_zip,
