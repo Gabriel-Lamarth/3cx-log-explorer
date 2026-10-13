@@ -1,0 +1,7 @@
+2026-10-08 11:21:08.028|0028|Info|_3CX.HttpClient|502 BadGateway
+2026-10-08 11:21:08.029|0028|Info|CallFlow|FlowID=_7001_7.Callflow.2 Component=discadorv2_tmslab
+2026-10-08 11:21:08.030|0028|Info|CallFlow|CallID=REDACTED-CALL-ID FlowID=_7001_7.Callflow.2
+2026-10-08 11:21:08.031|0028|Info|CallFlow|Iniciando processamento da chamada
+2026-10-08 11:21:08.032|0028|Error|PS_SMT|CallID=REDACTED-CALL-ID Duplicate entry '0'
+   at ServerSession.ReceiveReplyAsync
+   at CallFlow.ProcessAsync

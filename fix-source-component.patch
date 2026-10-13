@@ -1,0 +1,66 @@
+--- a/src/parser.rs
++++ b/src/parser.rs
+@@ -54,28 +54,44 @@
+ }
+ 
+ fn parse_record(line: &str, line_number: usize) -> Option<LogEvent> {
+-    let mut fields = line.splitn(4, '|');
++    // Support both common layouts:
++    // timestamp|thread|level|[source] message
++    // timestamp|thread|level|source|message
++    // splitn(5) preserves any further pipe characters in the message.
++    let mut fields = line.splitn(5, '|');
+     let timestamp = fields.next()?.trim();
+     let thread_id = fields.next()?.trim();
+     let level_text = fields.next()?.trim();
+-    let rest = fields.next()?;
++    let fourth = fields.next()?;
++    let fifth = fields.next();
+ 
+     if !looks_like_timestamp(timestamp) || thread_id.is_empty() || level_text.is_empty() {
+         return None;
+     }
+ 
+-    let rest = rest.trim_start();
+-    let (source, message) = if rest.starts_with('[') {
+-        if let Some(close) = rest.find(']') {
+-            let source = rest[1..close].trim().to_string();
+-            let message = rest[close + 1..].trim_start().to_string();
+-            (Some(source), message)
++    let (source, message) = if let Some(message) = fifth {
++        let source = fourth.trim();
++        let source = if source.is_empty() { None } else { Some(source.to_string()) };
++        (source, message.trim_start().to_string())
++    } else {
++        let rest = fourth.trim_start();
++        if rest.starts_with('[') {
++            if let Some(close) = rest.find(']') {
++                let source = rest[1..close].trim().to_string();
++                let message = rest[close + 1..].trim_start().to_string();
++                (Some(source), message)
++            } else {
++                (None, rest.to_string())
++            }
+         } else {
+             (None, rest.to_string())
+         }
+-    } else {
+-        (None, rest.to_string())
+     };
++
++    // Some logs put the component name in the source column (e.g. PS_SMT)
++    // instead of repeating it in the message. Prefer an explicit component
++    // extracted from the message, then fall back to the source label.
++    let component = extract_component(&message).or_else(|| source.clone());
+ 
+     Some(LogEvent {
+         timestamp: timestamp.to_string(),
+@@ -84,7 +100,7 @@
+         source,
+         flow_id: extract_flow_id(&message),
+         call_id: extract_call_id(&message),
+-        component: extract_component(&message),
++        component,
+         message,
+         raw: line.to_string(),
+         start_line: line_number,
